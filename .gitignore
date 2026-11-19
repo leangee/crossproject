@@ -1,0 +1,9 @@
+build/
+debug/
+release/
+*.user
+*.user.*
+*.o
+moc_*
+*.exe
+.DS_Store
