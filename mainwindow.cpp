@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QTime>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -50,11 +51,13 @@ MainWindow::MainWindow(QWidget *parent)
       m_itemList(nullptr),
       m_countLabel(nullptr),
       m_statusLabel(nullptr),
-      m_inputIsInAlternatePanel(false)
+      m_clockLabel(nullptr),
+      m_inputIsInAlternatePanel(false),
+      m_notificationsInTitle(false)
 {
     qDebug() << "MainWindow created";
     setWindowTitle("Список покупок");
-    resize(520, 500);
+    resize(520, 540);
 
     QWidget *central = new QWidget(this);
     setCentralWidget(central);
@@ -90,8 +93,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_countLabel = new QLabel("Товаров: 0", central);
     m_statusLabel = new QLabel("Готово", central);
+    m_clockLabel = new QLabel(central);
     mainLayout->addWidget(m_countLabel);
     mainLayout->addWidget(m_statusLabel);
+    mainLayout->addWidget(m_clockLabel);
+
+    QPushButton *notificationButton =
+        new QPushButton("Куда выводить уведомления о добавлении", central);
+    mainLayout->addWidget(notificationButton);
 
     // Временная панель нужна для демонстрации deleteLater() и QPointer.
     m_temporaryPanel = new TrackedWidget("TemporaryPanel", central);
@@ -111,6 +120,8 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::moveInputField);
     connect(deletePanelButton, &QPushButton::clicked,
             this, &MainWindow::deleteTemporaryPanel);
+    connect(notificationButton, &QPushButton::clicked,
+            this, &MainWindow::toggleNotificationTarget);
 
     // Один сигнал модели подключён к нескольким обработчикам.
     connect(m_model, &ShoppingListModel::itemAdded,
@@ -127,10 +138,24 @@ MainWindow::MainWindow(QWidget *parent)
             });
     connect(m_model, &ShoppingListModel::errorOccurred,
             this, &MainWindow::showError);
+
+    // Таймер обновляет часы в интерфейсе раз в секунду.
+    connect(&m_clockTimer, &QTimer::timeout, this, [this]() {
+        m_clockLabel->setText("Время: " + QTime::currentTime().toString("HH:mm:ss"));
+    });
+    m_clockTimer.start(1000);
+
+    // Сохраняем соединение, чтобы при необходимости заменить обработчик.
+    m_itemAddedNotificationConn =
+        connect(m_model, &ShoppingListModel::itemAdded, this,
+                [this](const QString &name) {
+                    m_statusLabel->setText("Добавлен товар: " + name);
+                });
 }
 
 MainWindow::~MainWindow()
 {
+    m_clockTimer.stop();
     qDebug() << "MainWindow destroyed";
 }
 
@@ -188,4 +213,32 @@ void MainWindow::deleteTemporaryPanel()
     } else {
         m_statusLabel->setText("Временная панель уже удалена");
     }
+}
+
+void MainWindow::toggleNotificationTarget()
+{
+    if (m_itemAddedNotificationConn)
+        disconnect(m_itemAddedNotificationConn);
+
+    m_notificationsInTitle = !m_notificationsInTitle;
+
+    if (m_notificationsInTitle) {
+        m_itemAddedNotificationConn =
+            connect(m_model, &ShoppingListModel::itemAdded, this,
+                    [this](const QString &name) {
+                        setWindowTitle("Список покупок — добавлен: " + name);
+                    });
+        m_statusLabel->setText("Уведомления о добавлении выводятся в заголовок.");
+    } else {
+        m_itemAddedNotificationConn =
+            connect(m_model, &ShoppingListModel::itemAdded, this,
+                    [this](const QString &name) {
+                        m_statusLabel->setText("Добавлен товар: " + name);
+                    });
+        setWindowTitle("Список покупок");
+        m_statusLabel->setText("Уведомления о добавлении выводятся в строку состояния.");
+    }
+
+    qDebug() << "Обработчик itemAdded переподключён. Заголовок:"
+             << m_notificationsInTitle;
 }
