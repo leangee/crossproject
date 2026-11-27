@@ -2,7 +2,9 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QMetaObject>
 #include <QPointer>
+#include <QTimer>
 
 class QLineEdit;
 class QListWidget;
@@ -24,6 +26,7 @@ private slots:
     void showError(const QString &message);
     void moveInputField();
     void deleteTemporaryPanel();
+    void toggleNotificationTarget();
 
 private:
     void refreshList();
@@ -36,7 +39,11 @@ private:
     QListWidget *m_itemList;
     QLabel *m_countLabel;
     QLabel *m_statusLabel;
+    QLabel *m_clockLabel;
+    QTimer m_clockTimer;
+    QMetaObject::Connection m_itemAddedNotificationConn;
     bool m_inputIsInAlternatePanel;
+    bool m_notificationsInTitle;
 };
 
 #endif // MAINWINDOW_H
